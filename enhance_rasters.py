@@ -1,26 +1,29 @@
-import numpy as np
 import rasterio
 from rasterio.plot import show
-from tensorflow.keras.models import load_model
-from scipy.ndimage import zoom
-from pathlib import Path
 import matplotlib.pyplot as plt
+import numpy as np
+from skimage.transform import resize
 
-# Load the saved model
-model = load_model('Test_data/Germany_trained_model.h5')
+# Read dimensions from metadata
+target_height, target_width, _ = [1024, 2048, 1]  # From metadata
 
 # Path to your raster file
 raster_path = 'Test_data/cropped_F18_20131201_20131231.cloud2.light1.marginal0.glare2.line_screened.avg_vis.tif'
 
 # Open the raster file
 with rasterio.open(raster_path) as raster:
-    # Plot the raster
-    fig, ax = plt.subplots(figsize=(10, 10))
-    show(raster, ax=ax)
+    # Read the first band
+    data = raster.read(1)
 
-    # Display dimensions on the plot
-    ax.set_title(f"Raster Dimensions: {raster.width}x{raster.height}")
+    # Resize the data to match the target dimensions
+    resized_data = resize(data, (target_height, target_width), anti_aliasing=True)
+
+    # Plot the resized raster
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(resized_data, cmap='gray')  # Assuming grayscale, adjust cmap as needed
+    ax.set_title(f"Resized Raster Dimensions: {target_width}x{target_height}")
     plt.show()
+
 
 # def resize_and_pad(arr):
 #     # Your provided resizing and padding logic
