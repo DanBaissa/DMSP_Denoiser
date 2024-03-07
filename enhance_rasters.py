@@ -1,47 +1,53 @@
+import json
 import rasterio
-from rasterio.plot import show
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage.transform import resize
+from tensorflow.keras.models import load_model
 
-# Read dimensions from metadata
-target_height, target_width, _ = [1024, 2048, 1]  # From metadata
+# Load metadata to get input_shape
+metadata_path = 'Test_data/Germany_trained_model_metadata.json'
+with open(metadata_path, 'r') as file:
+    metadata = json.load(file)
+    target_height, target_width, _ = metadata['input_shape']
 
-# Path to your raster file
+# Load the model
+model_path = 'Test_data/Germany_trained_model.h5'
+model = load_model(model_path)
+
+# Load and resize the raster data
 raster_path = 'Test_data/cropped_F18_20131201_20131231.cloud2.light1.marginal0.glare2.line_screened.avg_vis.tif'
-
-# Open the raster file
+# Load and resize the raster data
 with rasterio.open(raster_path) as raster:
-    # Read the first band
-    data = raster.read(1)
-
-    # Resize the data to match the target dimensions
+    data = raster.read(1)  # Read the first band
     resized_data = resize(data, (target_height, target_width), anti_aliasing=True)
 
-    # Plot the resized raster
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.imshow(resized_data, cmap='gray')  # Assuming grayscale, adjust cmap as needed
-    ax.set_title(f"Resized Raster Dimensions: {target_width}x{target_height}")
-    plt.show()
+# Normalize the resized raster data using its maximum value
+max_value = np.max(resized_data)
+if max_value > 0:  # Prevent division by zero
+    normalized_data = resized_data / max_value
+else:
+    normalized_data = resized_data  # Handle the case where the max value is 0
 
+# Model prediction
+# Assuming the model expects data in the shape of (1, height, width, channels)
+input_data = np.expand_dims(normalized_data, axis=[0, -1])  # Add batch and channel dimensions
+prediction = model.predict(input_data)
 
-# def resize_and_pad(arr):
-#     # Your provided resizing and padding logic
-#     target_size_largest = 2 ** np.floor(np.log2(max(arr.shape)))
-#     smaller_dim = min(arr.shape)
-#     target_size_smaller = 2 ** np.ceil(np.log2(smaller_dim))
-#     resize_ratio = target_size_largest / max(arr.shape)
-#     new_shape = (int(arr.shape[0] * resize_ratio), int(arr.shape[1] * resize_ratio))
-#     resized_arr = zoom(arr, (new_shape[0] / arr.shape[0], new_shape[1] / arr.shape[1]), order=1)
-#
-#     if arr.shape[0] < arr.shape[1]:  # Height is the smaller dimension
-#         pad_height = (int(target_size_smaller) - resized_arr.shape[0]) // 2
-#         pad_width = 0
-#     else:  # Width is the smaller dimension
-#         pad_width = (int(target_size_smaller) - resized_arr.shape[1]) // 2
-#         pad_height = 0
-#
-#     padded_arr = np.pad(resized_arr, ((pad_height, pad_height), (pad_width, pad_width)), mode='constant',
-#                         constant_values=0)
-#     return padded_arr
-#
+# Assuming the model outputs data in the shape of (1, height, width, channels)
+predicted_image = prediction[0, :, :, 0]  # Remove batch dimension and select the first channel
+
+# Plotting
+fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+
+# Plot original resized raster
+axs[0].imshow(resized_data, cmap='gray')
+axs[0].set_title('Original DMSP Raster')
+
+# Plot predicted output
+axs[1].imshow(predicted_image, cmap='gray')
+axs[1].set_title('Model Output')
+
+# Save to PDF
+plt.savefig('raster_and_prediction.pdf')
+plt.show()
